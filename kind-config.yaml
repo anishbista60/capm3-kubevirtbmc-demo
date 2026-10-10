@@ -1,0 +1,16 @@
+# Single-node on purpose: baremetal-net is a Linux bridge (br-baremetal) on
+# the kind node, so every "bare metal" VM must run on the same node to share
+# that L2 segment — just like servers plugged into one switch.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: capm3-kubevirtbmc
+networking:
+  # Spelled out because the demo depends on them: Calico pins its node-IP
+  # autodetection to the pod subnet, and the image server uses a fixed
+  # ClusterIP from the service subnet. The workload cluster's CIDRs must not
+  # overlap either (see lib.sh).
+  podSubnet: 10.244.0.0/16
+  serviceSubnet: 10.96.0.0/16
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed

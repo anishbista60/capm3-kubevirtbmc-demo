@@ -1,0 +1,15 @@
+# Fallback (VIRTUAL_MEDIA_TLS=false): the Part 2 configuration. The Ironic
+# API uses TLS, virtual media images are served over plain HTTP.
+apiVersion: ironic.metal3.io/v1alpha1
+kind: Ironic
+metadata:
+  name: ironic
+  namespace: baremetal-operator-system
+spec:
+  apiCredentialsName: ironic-credentials
+  networking:
+    disableHostNetwork: true
+  tls:
+    certificateName: ironic-cert
+    disableVirtualMediaTLS: true
+  version: "@@IRONIC_VERSION@@"

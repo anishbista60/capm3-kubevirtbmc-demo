@@ -1,0 +1,51 @@
+# Self-signed CA + serving certificate for Ironic (cert-manager driven).
+# The CA (Secret ironic-cacert) is also copied into a ConfigMap "ironic-ca"
+# in the hosts' namespace, which each VirtualMachineBMC references so that
+# KubeVirtBMC and the CDI importer trust Ironic's HTTPS virtual media URLs.
+# Both DNS names are needed: Ironic advertises the FQDN (see 05-ironic*.yaml).
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-issuer
+  namespace: baremetal-operator-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ironic-cacert
+  namespace: baremetal-operator-system
+spec:
+  commonName: ironic-ca
+  isCA: true
+  issuerRef:
+    kind: Issuer
+    name: selfsigned-issuer
+  secretName: ironic-cacert
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ca-issuer
+  namespace: baremetal-operator-system
+spec:
+  ca:
+    secretName: ironic-cacert
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ironic-cert
+  namespace: baremetal-operator-system
+spec:
+  secretTemplate:
+    labels:
+      environment.metal3.io/ironic-standalone-operator: "true"
+  dnsNames:
+  - ironic.baremetal-operator-system.svc
+  - ironic.baremetal-operator-system.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: ca-issuer
+  secretName: ironic-cert

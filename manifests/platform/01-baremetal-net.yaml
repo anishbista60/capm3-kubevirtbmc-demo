@@ -1,0 +1,47 @@
+# baremetal-net: a second NIC for every "bare metal" VM, on a real L2 segment.
+#
+# Why: CAPI needs a stable control-plane endpoint. On real hardware that is
+# usually a VIP announced with gratuitous ARP (kube-vip, keepalived). Kind's
+# pod network (kindnet) is a point-to-point veth + route mesh with no
+# broadcast domain, so ARP announcements go nowhere. A LoadBalancer Service
+# would paper over that, but it doesn't exist on a real rack — so instead we
+# give the VMs a genuine Linux bridge (br-baremetal) on the kind node, like
+# servers plugged into one switch, and run kube-vip in ARP mode on it.
+#
+# The pod network (eth0) is still used for everything provisioning-related:
+# Ironic, the image server, KubeVirtBMC and the internet.
+#
+# isGateway gives the kind node 192.168.100.1 on the bridge, which is how
+# management-cluster pods (CAPI/CAPM3 controllers) reach the VIP.
+#
+# Address plan — disjoint from every other CIDR in play (kind pods
+# 10.244.0.0/16, kind services 10.96.0.0/16, workload services 10.128.0.0/12,
+# workload pods 192.168.0.0/18):
+#   192.168.100.1        kind node (bridge gateway)
+#   192.168.100.10-.90   VM addresses (host-local IPAM)
+#   192.168.100.100      workload cluster API VIP (kube-vip), outside the IPAM range
+#
+# Requires the CNI "bridge" binary on the kind node; setup-platform.sh copies it in.
+# Adapted from https://github.com/lentzi90/playground (Metal3/).
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: baremetal-net
+  namespace: default
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "type": "bridge",
+      "bridge": "br-baremetal",
+      "isGateway": true,
+      "isDefaultGateway": false,
+      "ipMasq": false,
+      "hairpinMode": true,
+      "ipam": {
+        "type": "host-local",
+        "subnet": "192.168.100.0/24",
+        "rangeStart": "192.168.100.10",
+        "rangeEnd": "192.168.100.90"
+      }
+    }
