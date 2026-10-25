@@ -9,7 +9,7 @@ trap 'on_error $LINENO' ERR
 
 preflight() {
   section "Preflight"
-  require_cmds kubectl clusterctl curl perl tar "$CONTAINER_RUNTIME"
+  require_cmds kubectl clusterctl curl tar "$CONTAINER_RUNTIME"
   require_kind_context
 
   local arch; arch=$($CONTAINER_RUNTIME exec "$KIND_NODE" uname -m)
@@ -107,7 +107,7 @@ install_capi() {
 }
 
 install_ironic() {
-  stage_start "Ironic Standalone Operator $IRSO_VERSION + Ironic $IRONIC_VERSION"
+  stage_start "Ironic Standalone Operator $IRSO_VERSION + Ironic"
   kubectl apply -f "https://github.com/metal3-io/ironic-standalone-operator/releases/download/${IRSO_VERSION}/install.yaml"
   kubectl -n ironic-standalone-operator-system wait --for=condition=Available \
     deploy/ironic-standalone-operator-controller-manager --timeout=300s
@@ -120,9 +120,8 @@ install_ironic() {
   local ironic_cr="$MANIFESTS/platform/05-ironic-vmedia-tls.yaml"
   [[ "$VIRTUAL_MEDIA_TLS" == "true" ]] || ironic_cr="$MANIFESTS/platform/05-ironic-vmedia-http.yaml"
   info "Ironic CR: $(basename "$ironic_cr")"
-  export IRONIC_VERSION
   # The IrSO webhook can take a moment to start answering after the deployment is Available.
-  wait_until "Ironic CR accepted" 120 "render '$ironic_cr' | kubectl apply -f -"
+  wait_until "Ironic CR accepted" 120 "kubectl apply -f '$ironic_cr'"
   kubectl -n baremetal-operator-system wait --for=condition=Ready ironic/ironic --timeout=600s
   stage_end
 }

@@ -13,26 +13,16 @@ source "$ROOT/versions.env"
 : "${CONTAINER_RUNTIME:=docker}"
 KIND_NODE="${KIND_CLUSTER_NAME}-control-plane"
 
-: "${CLUSTER_NAME:=kvbmc-cluster}"          # the CAPI workload cluster
-NAMESPACE=default                          # several manifests assume it (NAD, image server, BMC secret)
-: "${CP_REPLICAS:=1}"
-: "${WORKER_REPLICAS:=1}"
 : "${SPARE_HOSTS:=1}"                       # free BMHs kept around for scale-out / rolling upgrades
 
-: "${HOST_PREFIX:=kvbmc-node}"
-: "${HOST_CPUS:=2}"
-: "${HOST_MEMORY:=4Gi}"
-: "${HOST_DISK_SIZE:=30Gi}"
+# Fixed by the plain manifests in manifests/: change them there as well.
+CLUSTER_NAME=kvbmc-cluster                 # the CAPI workload cluster (manifests/cluster/)
+NAMESPACE=default                          # every namespaced manifest uses it
+CP_REPLICAS=1                              # initial KubeadmControlPlane replicas
+WORKER_REPLICAS=1                          # initial MachineDeployment replicas
+HOST_PREFIX=kvbmc-node                     # one directory per host in manifests/hosts/
 HOST_LABEL="capm3-demo.metal3.io/host"
-
-# kube-vip VIP on baremetal-net (see manifests/platform/01-baremetal-net.yaml)
-: "${VIP:=192.168.100.100}"
-: "${WORKLOAD_POD_CIDR:=192.168.0.0/18}"
-: "${WORKLOAD_SERVICE_CIDR:=10.128.0.0/12}"   # must not overlap the kind service CIDR (10.96.0.0/16)
-: "${MGMT_POD_CIDR:=10.244.0.0/16}"           # kind podSubnet; Calico pins node IP autodetection to it
-
-# The image server's fixed ClusterIP (manifests/platform/06-image-server.yaml)
-IMAGE_SERVER="http://10.96.200.200:8080"
+VIP=192.168.100.100                        # kube-vip VIP on baremetal-net (manifests/platform/01-baremetal-net.yaml)
 
 # true  = Ironic serves virtual media over HTTPS; KubeVirtBMC/CDI trust Ironic's CA
 #         through VirtualMachineBMC.spec.redfish.virtualMedia.tls (KubeVirtBMC >= v0.11.0)
@@ -63,14 +53,6 @@ stage_end() {
 }
 fmt_secs() { printf '%dm%02ds' $(( $1 / 60 )) $(( $1 % 60 )); }
 
-# --- Templates -----------------------------------------------------------------
-# Replaces @@VAR@@ with the value of the exported env var VAR and fails on any
-# unset one. @@ is used instead of ${VAR} because the cloud-init commands in the
-# templates contain shell variables of their own.
-render() {
-  RENDER_SRC=$1 perl -pe 's/@@([A-Z0-9_]+)@@/exists $ENV{$1} ? $ENV{$1} : die "render: $1 is not set (in $ENV{RENDER_SRC})\n"/ge' "$1"
-}
-
 # --- Polling -------------------------------------------------------------------
 # wait_until <description> <timeout-seconds> <check-cmd> [status-cmd]
 # Re-runs check-cmd every 10s until it succeeds. status-cmd, if given, prints a
@@ -95,6 +77,8 @@ wait_until() {
 
 # --- "Bare metal" host pool ------------------------------------------------------
 host_name() { printf '%s-%d' "$HOST_PREFIX" "$1"; }
+# Number of hosts that have manifests (manifests/hosts/<prefix>-<i>/).
+host_pool_size() { find "$MANIFESTS/hosts" -mindepth 1 -maxdepth 1 -type d -name "$HOST_PREFIX-*" | wc -l | tr -d ' '; }
 
 # Lines of "<name> <provisioning-state> <consumer-or-dash>"
 bmh_table() {
@@ -108,24 +92,21 @@ hosts_free()    { bmh_table | awk '$2 == "available" && $3 == "-"' | wc -l | tr 
 hosts_pending() { bmh_table | awk '$3 == "-" && $2 ~ /^(-|registering|inspecting|preparing|deprovisioning|powering off before delete)$/' | wc -l | tr -d ' '; }
 bmh_summary()   { bmh_table | awk '{ s[$2]++ } END { for (k in s) printf "%s=%d ", k, s[k] }'; }
 
-# Creates the PVC + KubeVirt VM + VirtualMachineBMC + BareMetalHost for host <i>.
+# Creates the PVC + KubeVirt VM + VirtualMachineBMC + BareMetalHost for host <i>
+# from manifests/hosts/<prefix>-<i>/.
 create_host() {
-  local i=$1
-  export HOST_NAME; HOST_NAME=$(host_name "$i")
-  export HOST_BOOT_MAC; HOST_BOOT_MAC=$(printf '52:54:00:00:00:%02x' "$i")
-  # Distinct MAC prefix for the baremetal-net NIC: the guest finds that NIC by
-  # MAC because q35 PCI ordering makes interface names unpredictable.
-  export HOST_BM_MAC; HOST_BM_MAC=$(printf '52:54:00:10:00:%02x' "$i")
-  export NAMESPACE HOST_LABEL HOST_CPUS HOST_MEMORY HOST_DISK_SIZE
+  local name; name=$(host_name "$1")
+  local dir="$MANIFESTS/hosts/$name"
+  [[ -d "$dir" ]] || die "no manifests for $name: the pool has $(host_pool_size) hosts (add $dir/ to grow it)"
 
-  if kubectl -n "$NAMESPACE" get vm "$HOST_NAME" >/dev/null 2>&1; then
-    info "$HOST_NAME already exists"
+  if kubectl -n "$NAMESPACE" get vm "$name" >/dev/null 2>&1; then
+    info "$name already exists"
   else
-    info "creating $HOST_NAME (boot MAC $HOST_BOOT_MAC, baremetal-net MAC $HOST_BM_MAC)"
-    render "$MANIFESTS/hosts/host-vm.yaml.tpl" | kubectl apply -f -
+    info "creating $name"
+    kubectl apply -f "$dir/vm.yaml"
   fi
-  kubectl -n "$NAMESPACE" wait --for=condition=ServiceReady --timeout=180s "virtualmachinebmc/$HOST_NAME-bmc" >/dev/null
-  render "$MANIFESTS/hosts/host-bmh.yaml.tpl" | kubectl apply -f -
+  kubectl -n "$NAMESPACE" wait --for=condition=ServiceReady --timeout=180s "virtualmachinebmc/$name-bmc" >/dev/null
+  kubectl apply -f "$dir/bmh.yaml"
 }
 
 # ensure_hosts <n>: make sure at least n hosts exist (indices 0..n-1).
@@ -196,28 +177,8 @@ md_settled() { # md_settled <replicas> <version>
   [[ "$s" == "$1/$1/$1/$2" ]]
 }
 
-# Renders and applies the control plane / worker templates at a given version
-# and replica count (also used by demo-upgrade.sh to roll to a new version).
-apply_cluster_part() { # apply_cluster_part <template> <version> <cp-replicas> <worker-replicas>
-  export K8S_TARGET_VERSION=$2
-  export K8S_TARGET_SLUG=${2//./-}
-  export CP_TARGET_REPLICAS=$3 WORKER_TARGET_REPLICAS=$4
-  export CLUSTER_NAME NAMESPACE VIP KUBE_VIP_VERSION IMAGE_SERVER SSH_PUBLIC_KEY
-  export WORKLOAD_POD_CIDR WORKLOAD_SERVICE_CIDR
-  render "$MANIFESTS/cluster/$1" | kubectl apply -f -
-}
-
-ssh_public_key() {
-  local key="$ROOT/.ssh/id_ed25519"
-  if [[ ! -f "$key" ]]; then
-    mkdir -p "$ROOT/.ssh"
-    ssh-keygen -q -t ed25519 -N '' -C capm3-kubevirtbmc-demo -f "$key"
-  fi
-  cat "$key.pub"
-}
-
 # Resolves a workload node name to its BareMetalHost: CAPM3 labels each node
-# with metal3.io/uuid=<BMH UID> (see kubeletExtraArgs in the cluster templates).
+# with metal3.io/uuid=<BMH UID> (see kubeletExtraArgs in manifests/cluster/).
 node_to_bmh() {
   local uuid
   uuid=$(wl get node "$1" -o jsonpath='{.metadata.labels.metal3\.io/uuid}')

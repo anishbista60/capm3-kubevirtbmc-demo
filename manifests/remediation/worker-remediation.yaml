@@ -6,10 +6,10 @@
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineHealthCheck
 metadata:
-  name: @@CLUSTER_NAME@@-workers
-  namespace: @@NAMESPACE@@
+  name: kvbmc-cluster-workers
+  namespace: default
 spec:
-  clusterName: @@CLUSTER_NAME@@
+  clusterName: kvbmc-cluster
   selector:
     matchLabels:
       nodepool: workers
@@ -28,13 +28,13 @@ spec:
     templateRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
       kind: Metal3RemediationTemplate
-      name: @@CLUSTER_NAME@@-workers
+      name: kvbmc-cluster-workers
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: Metal3RemediationTemplate
 metadata:
-  name: @@CLUSTER_NAME@@-workers
-  namespace: @@NAMESPACE@@
+  name: kvbmc-cluster-workers
+  namespace: default
 spec:
   template:
     spec:
