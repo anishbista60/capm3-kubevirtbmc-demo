@@ -1,0 +1,72 @@
+# demo-upgrade.sh: the workers at v1.36.5. A new KubeadmConfigTemplate
+# (bootstrap templates are treated as immutable) and the MachineDeployment
+# pointed at it, which is what triggers the rollout. No replicas, for the same
+# reason as upgrade/20-controlplane.yaml. The Metal3MachineTemplate and
+# Metal3DataTemplate from manifests/cluster/30-workers.yaml are reused.
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfigTemplate
+metadata:
+  name: kvbmc-cluster-workers-v1-36-5
+  namespace: default
+spec:
+  template:
+    spec:
+      files:
+      - path: /usr/local/bin/install-k8s.sh
+        owner: root:root
+        permissions: "0755"
+        contentFrom:
+          secret:
+            name: install-k8s
+            key: install-k8s.sh
+      - path: /etc/capm3-demo/kubernetes-version
+        owner: root:root
+        permissions: "0644"
+        content: "v1.36.5"
+      preKubeadmCommands:
+      - /usr/local/bin/install-k8s.sh
+      joinConfiguration:
+        nodeRegistration:
+          name: "{{ ds.meta_data.name }}"
+          kubeletExtraArgs:
+          - name: node-labels
+            value: "metal3.io/uuid={{ ds.meta_data.uuid }}"
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: kvbmc-cluster-workers
+  namespace: default
+  labels:
+    cluster.x-k8s.io/cluster-name: kvbmc-cluster
+    nodepool: workers
+spec:
+  clusterName: kvbmc-cluster
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: kvbmc-cluster
+      nodepool: workers
+  rollout:
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        # Replace in place: release one host, then claim one. Needs no spare.
+        maxSurge: 0
+        maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: kvbmc-cluster
+        nodepool: workers
+    spec:
+      clusterName: kvbmc-cluster
+      version: v1.36.5
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: KubeadmConfigTemplate
+          name: kvbmc-cluster-workers-v1-36-5
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: Metal3MachineTemplate
+        name: kvbmc-cluster-workers

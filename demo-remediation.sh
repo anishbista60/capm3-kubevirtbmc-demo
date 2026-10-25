@@ -15,8 +15,7 @@ require_kind_context
 wl_sync_kubeconfig
 
 stage_start "MachineHealthCheck + Metal3RemediationTemplate"
-export CLUSTER_NAME NAMESPACE
-render "$MANIFESTS/remediation/worker-remediation.yaml.tpl" | kubectl apply -f -
+kubectl apply -f "$MANIFESTS/remediation/worker-remediation.yaml"
 kubectl -n "$NAMESPACE" get mhc
 stage_end
 

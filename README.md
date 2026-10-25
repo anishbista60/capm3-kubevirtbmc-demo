@@ -41,10 +41,10 @@ Each host has two networks:
 
 - **An x86_64 Linux host with KVM.** Nested virtualization works if `/dev/kvm` exists in the guest. The node images and IPA ramdisks are x86_64. Without `/dev/kvm` the scripts fall back to KubeVirt software emulation, which works but is very slow. Apple Silicon Macs are not supported.
 - **Resources.** The default pool is 3 hosts (1 control plane, 1 worker, 1 spare) with 2 vCPU, 4 GiB RAM and a 30 GiB disk each. Plan for about **8 CPUs, 20 GiB RAM and 100 GiB disk**. The HA demo grows the pool to 5 hosts, which needs about **12 CPUs and 28 GiB RAM**.
-- **Tools:** `kind`, `kubectl`, `clusterctl` (v1.14.x), `docker`, `curl`, `perl` and `ssh-keygen`.
+- **Tools:** `kind`, `kubectl`, `clusterctl` (v1.14.x), `docker` and `curl`.
 - **Outbound internet** from the host, because the VMs download packages and images.
 
-All versions are pinned in [`versions.env`](versions.env), and any of them can be overridden from the environment.
+Platform versions are pinned in [`versions.env`](versions.env) and can be overridden from the environment. Ironic, the node image, the workload Kubernetes versions and kube-vip are written directly into the manifests.
 
 | Component | Version | Component | Version |
 |---|---|---|---|
@@ -90,7 +90,7 @@ KEEP_HOSTS=true ./cleanup.sh    # delete the Cluster only: watch every BMH retur
 kind delete cluster --name capm3-kubevirtbmc   # everything
 ```
 
-Useful knobs (see the top of [`lib.sh`](lib.sh)): `CP_REPLICAS`, `WORKER_REPLICAS`, `SPARE_HOSTS`, `HOST_CPUS`, `HOST_MEMORY`, `HOST_DISK_SIZE`, `CLUSTER_NAME`, `VIRTUAL_MEDIA_TLS`, and `HOLD_SECONDS` for the failover demo.
+Useful knobs (see the top of [`lib.sh`](lib.sh)): `SPARE_HOSTS`, `VIRTUAL_MEDIA_TLS`, and `HOLD_SECONDS` for the failover demo. Everything else (cluster name, replica counts, host sizes, CIDRs, VIP) is plain YAML under [`manifests/`](manifests).
 
 ## What each step shows
 
@@ -146,7 +146,7 @@ Most of the work in getting this running was networking. These are the points wo
 4. **Use bridge binding, not masquerade.** With masquerade every VM gets `10.0.2.2`, and kubelet node IPs and Calico both need unique, routable addresses. Bridge binding needs two host fixes, which [`02-network-fixups.yaml`](manifests/platform/02-network-fixups.yaml) applies: `proxy_arp` on veths, and loose `rp_filter`, because replies to the VIP leave through eth0.
 5. **Calico can pick the wrong NIC.** Pin `IP_AUTODETECTION_METHOD=cidr=<pod network>`. Also set `CALICO_IPV4POOL_CIDR`, because Calico's default `192.168.0.0/16` overlaps baremetal-net.
 6. **Don't overlap service CIDRs.** The VMs' eth0 sits on the management pod network and resolves through its DNS, so the workload service CIDR is `10.128.0.0/12`.
-7. **kube-vip and kubeadm ≥ 1.29.** During `kubeadm init`, kube-vip has to use `super-admin.conf` ([kube-vip#684](https://github.com/kube-vip/kube-vip/issues/684)). The template only swaps the file on the init node, detected through `/run/kubeadm/kubeadm.yaml`, and swaps it back afterwards.
+7. **kube-vip and kubeadm ≥ 1.29.** During `kubeadm init`, kube-vip has to use `super-admin.conf` ([kube-vip#684](https://github.com/kube-vip/kube-vip/issues/684)). The control plane config only swaps the file on the init node, detected through `/run/kubeadm/kubeadm.yaml`, and swaps it back afterwards.
 8. **Make Ironic's advertised URLs match its certificate.** Without host networking, IrSO advertises the pod IP, which isn't in the certificate. Setting `externalCallbackURL` and `imageServerExternalURL` to the Service FQDN fixes that.
 
 ## Layout
@@ -154,22 +154,23 @@ Most of the work in getting this running was networking. These are the points wo
 ```
 kind-config.yaml            single-node kind, pinned pod/service CIDRs
 versions.env                every pinned version
-lib.sh                      shared helpers (templating, waits, host pool, workload kubectl)
+lib.sh                      shared helpers (waits, host pool, workload kubectl)
 setup-platform.sh           one-time platform install
 run-demo.sh                 core POC
 demo-*.sh                   lifecycle and stretch demos
 watch.sh  wl-kubectl.sh  collect-info.sh  cleanup.sh
 manifests/
   platform/   baremetal-net NAD, network fixups, Ironic certs/creds/CR, image server
-  hosts/      VM + VirtualMachineBMC and BareMetalHost templates, BMC secret
-  cluster/    Cluster + Metal3Cluster, control plane, workers
+  hosts/      BMC secret; kvbmc-node-<i>/ with vm.yaml (PVC + VM + VirtualMachineBMC) and bmh.yaml
+  cluster/    Cluster + Metal3Cluster, control plane, workers (v1.35.9)
+  upgrade/    control plane and workers at v1.36.5, for demo-upgrade.sh
   addons/     Calico ClusterResourceSet (+ kustomize patch)
   remediation/ MachineHealthCheck + Metal3RemediationTemplate
   scripts/    install-k8s.sh (node bootstrap, from the install-k8s Secret)
 out/                        generated: kubeconfig, timings.tsv, blog-facts.md, probe logs
 ```
 
-Templates use `@@VAR@@` placeholders, which `render` in `lib.sh` fills from the environment. It fails on any variable that isn't set.
+Every manifest is plain YAML that the scripts apply as-is with `kubectl apply -f`. The host pool has 6 hosts (`kvbmc-node-0` to `kvbmc-node-5`). To grow it, copy a host directory and change the name and the last byte of both MACs.
 
 ## Troubleshooting
 
@@ -178,12 +179,12 @@ Templates use `@@VAR@@` placeholders, which `render` in `lib.sh` fills from the 
 | BMH stuck in `registering` | `kubectl get virtualmachinebmc`: is the condition `ServiceReady`? Check `kubectl logs -l app=virtbmc` and the BMC Service `<host>-virtbmc`. |
 | BMH stuck in `inspecting` | `kubectl get dv`: did the IPA ISO import? Check `virtctl console <host>` and `kubectl -n baremetal-operator-system logs deploy/ironic-service`. |
 | DataVolume `x509: certificate signed by unknown authority` | Check that `configmap/ironic-ca` exists in `default` and the VMBMC references it. Fallback: `VIRTUAL_MEDIA_TLS=false`. |
-| DataVolume too small / out of space | Raise `bmc.kubevirt.io/datavolume-size-margin` in [`host-vm.yaml.tpl`](manifests/hosts/host-vm.yaml.tpl), or patch CDI `filesystemOverhead`. |
+| DataVolume too small / out of space | Raise `bmc.kubevirt.io/datavolume-size-margin` in `manifests/hosts/kvbmc-node-*/vm.yaml`, or patch CDI `filesystemOverhead`. |
 | BMH `provisioned` but no kubeconfig / API never answers | Log into the host (`virtctl console`) and check `/var/log/cloud-init-output.log`. Is the baremetal-net NIC up with an address? Is kube-vip running (`crictl ps`)? |
 | Nodes Ready but pods can't reach each other | Calico autodetection: `./wl-kubectl.sh -n kube-system logs ds/calico-node \| grep -i autodetect`. |
 | CAPI controllers can't reach the VIP | Is `ds/network-fixups` running? Does the kind node have 192.168.100.1 on `br-baremetal`? |
 
-To SSH into a host, the demo generates a key in `.ssh/` (git-ignored). Run `ssh` from a pod or the kind node to the host's pod IP (`kubectl get vmi -o wide`).
+To get a shell on a host, use `virtctl console <host>`. The manifests don't add an SSH key; to use SSH, add a `users` entry with your public key to `kubeadmConfigSpec` in [`20-controlplane.yaml`](manifests/cluster/20-controlplane.yaml) and to the KubeadmConfigTemplate in [`30-workers.yaml`](manifests/cluster/30-workers.yaml) (and their copies in `manifests/upgrade/`).
 
 ## Credits
 

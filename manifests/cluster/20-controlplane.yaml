@@ -1,19 +1,19 @@
 # Control plane: KubeadmControlPlane + which BareMetalHosts it gets and what
-# is written to them. Re-applied by demo-upgrade.sh with a new version.
+# is written to them. demo-upgrade.sh applies manifests/upgrade/20-controlplane.yaml.
 apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlane
 metadata:
-  name: @@CLUSTER_NAME@@
-  namespace: @@NAMESPACE@@
+  name: kvbmc-cluster
+  namespace: default
 spec:
-  replicas: @@CP_TARGET_REPLICAS@@
-  version: @@K8S_TARGET_VERSION@@
+  replicas: 1
+  version: v1.35.9
   machineTemplate:
     spec:
       infrastructureRef:
         apiGroup: infrastructure.cluster.x-k8s.io
         kind: Metal3MachineTemplate
-        name: @@CLUSTER_NAME@@-controlplane
+        name: kvbmc-cluster-controlplane
   rollout:
     strategy:
       type: RollingUpdate
@@ -31,7 +31,7 @@ spec:
     - path: /etc/capm3-demo/kubernetes-version
       owner: root:root
       permissions: "0644"
-      content: "@@K8S_TARGET_VERSION@@"
+      content: "v1.35.9"
     # kube-vip static pod, ARP mode, announcing the API VIP on baremetal-net.
     # __VIP_IFACE__ is replaced at boot (preKubeadmCommands) with the NIC
     # whose MAC starts with 52:54:00:10 — interface names aren't predictable.
@@ -47,7 +47,7 @@ spec:
         spec:
           containers:
           - name: kube-vip
-            image: ghcr.io/kube-vip/kube-vip:@@KUBE_VIP_VERSION@@
+            image: ghcr.io/kube-vip/kube-vip:v1.2.4
             imagePullPolicy: IfNotPresent
             args: ["manager"]
             env:
@@ -55,7 +55,7 @@ spec:
             - {name: port, value: "6443"}
             - {name: vip_interface, value: __VIP_IFACE__}
             - {name: vip_subnet, value: "32"}
-            - {name: address, value: "@@VIP@@"}
+            - {name: address, value: "192.168.100.100"}
             - {name: cp_enable, value: "true"}
             - {name: cp_namespace, value: kube-system}
             - {name: vip_leaderelection, value: "true"}
@@ -127,17 +127,12 @@ spec:
         kubeletExtraArgs:
         - name: node-labels
           value: "metal3.io/uuid={{ ds.meta_data.uuid }}"
-    users:
-    - name: ubuntu
-      sudo: "ALL=(ALL) NOPASSWD:ALL"
-      sshAuthorizedKeys:
-      - "@@SSH_PUBLIC_KEY@@"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: Metal3MachineTemplate
 metadata:
-  name: @@CLUSTER_NAME@@-controlplane
-  namespace: @@NAMESPACE@@
+  name: kvbmc-cluster-controlplane
+  namespace: default
 spec:
   nodeReuse: false
   template:
@@ -145,18 +140,18 @@ spec:
       # Wipe partition tables when a host is released, then back to the pool.
       automatedCleaningMode: metadata
       dataTemplate:
-        name: @@CLUSTER_NAME@@-controlplane
+        name: kvbmc-cluster-controlplane
       image:
-        url: @@IMAGE_SERVER@@/node-image.img
-        checksum: @@IMAGE_SERVER@@/node-image.img.sha256sum
+        url: http://10.96.200.200:8080/node-image.img
+        checksum: http://10.96.200.200:8080/node-image.img.sha256sum
         checksumType: sha256
         diskFormat: qcow2
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: Metal3DataTemplate
 metadata:
-  name: @@CLUSTER_NAME@@-controlplane
-  namespace: @@NAMESPACE@@
+  name: kvbmc-cluster-controlplane
+  namespace: default
 spec:
   metaData:
     objectNames:

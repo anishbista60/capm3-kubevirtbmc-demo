@@ -3,16 +3,16 @@
 apiVersion: metal3.io/v1alpha1
 kind: BareMetalHost
 metadata:
-  name: @@HOST_NAME@@
-  namespace: @@NAMESPACE@@
+  name: kvbmc-node-5
+  namespace: default
   labels:
-    @@HOST_LABEL@@: "true"
+    capm3-demo.metal3.io/host: "true"
 spec:
   online: true
   bootMode: UEFI
-  bootMACAddress: "@@HOST_BOOT_MAC@@"
+  bootMACAddress: "52:54:00:00:00:05"
   bmc:
-    address: redfish-virtualmedia+http://@@HOST_NAME@@-virtbmc.@@NAMESPACE@@.svc.cluster.local:80/redfish/v1/Systems/1
+    address: redfish-virtualmedia+http://kvbmc-node-5-virtbmc.default.svc.cluster.local:80/redfish/v1/Systems/1
     credentialsName: bmc-credentials
   rootDeviceHints:
     deviceName: /dev/vda

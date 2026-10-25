@@ -27,15 +27,15 @@ wl_sync_kubeconfig >/dev/null 2>&1 || true
   echo "| CAPM3 | $(img capm3-system capm3-controller-manager) |"
   echo "| Metal3 IPAM | $(img metal3-ipam-system ipam-controller-manager) |"
   echo "| Workload Kubernetes | $(kubectl -n "$NAMESPACE" get kcp "$CLUSTER_NAME" -o jsonpath='{.spec.version}' 2>/dev/null) |"
-  echo "| kube-vip | $KUBE_VIP_VERSION |"
+  echo "| kube-vip | $(WL_TIMEOUT=5s wl -n kube-system get pods -o jsonpath='{.items[?(@.spec.containers[0].name=="kube-vip")].spec.containers[0].image}' 2>/dev/null | awk '{print $1}') |"
   echo "| Calico | $CALICO_VERSION |"
-  echo "| Node OS image | $UBUNTU_IMAGE_URL |"
+  echo "| Node OS image | $(kubectl -n "$NAMESPACE" get deploy image-server -o jsonpath='{.spec.template.spec.initContainers[0].env[?(@.name=="IMAGE_URL")].value}' 2>/dev/null) |"
   echo "| Virtual media TLS | $VIRTUAL_MEDIA_TLS |"
   echo
   echo "## Footprint"
   echo
   echo "- Host: $(nproc 2>/dev/null || sysctl -n hw.ncpu) CPUs; kind node allocatable: $(kubectl get node "$KIND_NODE" -o jsonpath='{.status.allocatable.cpu} CPU, {.status.allocatable.memory}')"
-  echo "- Hosts (VMs) in the pool: $(hosts_total), each ${HOST_CPUS} vCPU / ${HOST_MEMORY} / ${HOST_DISK_SIZE} disk"
+  echo "- Hosts (VMs) in the pool: $(hosts_total), each $(kubectl -n "$NAMESPACE" get vm "$(host_name 0)" -o jsonpath='{.spec.template.spec.domain.cpu.cores} vCPU / {.spec.template.spec.domain.memory.guest}' 2>/dev/null) / $(kubectl -n "$NAMESPACE" get pvc "$(host_name 0)-rootdisk" -o jsonpath='{.spec.resources.requests.storage}' 2>/dev/null) disk"
   echo "- /dev/kvm on the kind node: $($CONTAINER_RUNTIME exec "$KIND_NODE" test -c /dev/kvm && echo yes || echo 'no (emulation)')"
   echo
   echo "## Stage timings"

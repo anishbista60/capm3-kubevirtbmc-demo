@@ -19,7 +19,7 @@ NUM_HOSTS=$(( CP_REPLICAS + WORKER_REPLICAS + SPARE_HOSTS ))
 
 preflight() {
   section "Preflight"
-  require_cmds kubectl clusterctl curl perl ssh-keygen base64 "$CONTAINER_RUNTIME"
+  require_cmds kubectl clusterctl curl base64 "$CONTAINER_RUNTIME"
   require_kind_context
   kubectl -n baremetal-operator-system get ironic ironic >/dev/null 2>&1 \
     || die "Ironic not found — run ./setup-platform.sh first"
@@ -51,8 +51,7 @@ prepare_supporting_resources() {
   # Calico for the workload cluster, delivered by a ClusterResourceSet.
   local tmp; tmp=$(mktemp -d)
   curl -fsSL -o "$tmp/calico.yaml" "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
-  export MGMT_POD_CIDR WORKLOAD_POD_CIDR
-  render "$MANIFESTS/addons/calico/kustomization.yaml.tpl" > "$tmp/kustomization.yaml"
+  cp "$MANIFESTS/addons/calico/kustomization.yaml" "$tmp/kustomization.yaml"
   kubectl kustomize "$tmp" > "$OUT/calico.yaml"
   rm -rf "$tmp"
   # Server-side apply: the ~300 KB manifest doesn't fit in the
@@ -63,8 +62,7 @@ prepare_supporting_resources() {
   stage_end
 
   stage_start "Image server (downloads the Ubuntu cloud image once)"
-  export UBUNTU_IMAGE_URL
-  render "$MANIFESTS/platform/06-image-server.yaml" | kubectl apply -f -
+  kubectl apply -f "$MANIFESTS/platform/06-image-server.yaml"
   kubectl -n "$NAMESPACE" rollout status deploy/image-server --timeout=1200s
   stage_end
 }
@@ -85,12 +83,9 @@ create_cluster() {
   stage_start "Workload cluster $CLUSTER_NAME"
   if kubectl -n "$NAMESPACE" get cluster "$CLUSTER_NAME" >/dev/null 2>&1; then
     # Re-applying would reset replicas/version changed by the lifecycle demos.
-    info "cluster $CLUSTER_NAME already exists, not re-applying templates"
+    info "cluster $CLUSTER_NAME already exists, not re-applying manifests/cluster/"
   else
-    export SSH_PUBLIC_KEY; SSH_PUBLIC_KEY=$(ssh_public_key)
-    apply_cluster_part 10-cluster.yaml.tpl      "$K8S_VERSION" "$CP_REPLICAS" "$WORKER_REPLICAS"
-    apply_cluster_part 20-controlplane.yaml.tpl "$K8S_VERSION" "$CP_REPLICAS" "$WORKER_REPLICAS"
-    apply_cluster_part 30-workers.yaml.tpl      "$K8S_VERSION" "$CP_REPLICAS" "$WORKER_REPLICAS"
+    kubectl apply -f "$MANIFESTS/cluster/"
   fi
   local version; version=$(kubectl -n "$NAMESPACE" get kcp "$CLUSTER_NAME" -o jsonpath='{.spec.version}')
   local cp; cp=$(kubectl -n "$NAMESPACE" get kcp "$CLUSTER_NAME" -o jsonpath='{.spec.replicas}')

@@ -1,0 +1,97 @@
+# One "bare metal server": a root disk, a KubeVirt VM and the
+# VirtualMachineBMC that gives it a Redfish BMC. Applied by lib.sh create_host.
+# Host <i> has boot MAC 52:54:00:00:00:0<i> and baremetal-net MAC
+# 52:54:00:10:00:0<i>; the guest finds the baremetal-net NIC by that prefix.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kvbmc-node-4-rootdisk
+  namespace: default
+  labels:
+    capm3-demo.metal3.io/host: "true"
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30Gi
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: kvbmc-node-4
+  namespace: default
+  labels:
+    capm3-demo.metal3.io/host: "true"
+spec:
+  # Powered off until Ironic turns it on through the BMC — like a racked server.
+  runStrategy: Halted
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: kvbmc-node-4
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        memory:
+          guest: 4Gi
+        machine:
+          type: q35
+        firmware:
+          bootloader:
+            efi:
+              secureBoot: false
+        devices:
+          disks:
+          - name: rootdisk
+            disk:
+              bus: virtio
+          # Empty drive that KubeVirtBMC hotplugs the virtual media ISO into.
+          - name: cdrom
+            cdrom:
+              bus: sata
+          interfaces:
+          # eth0: pod network. Bridge binding (not masquerade) so each VM has
+          # its own routable IP — kubelet node IPs and Calico need that.
+          - name: default
+            macAddress: "52:54:00:00:00:04"
+            bridge: {}
+          # Second NIC on baremetal-net, where the kube-vip VIP lives.
+          - name: baremetal
+            macAddress: "52:54:00:10:00:04"
+            bridge: {}
+      networks:
+      - name: default
+        pod: {}
+      - name: baremetal
+        multus:
+          networkName: baremetal-net
+      volumes:
+      - name: rootdisk
+        persistentVolumeClaim:
+          claimName: kvbmc-node-4-rootdisk
+---
+apiVersion: bmc.kubevirt.io/v1beta1
+kind: VirtualMachineBMC
+metadata:
+  name: kvbmc-node-4-bmc
+  namespace: default
+  labels:
+    capm3-demo.metal3.io/host: "true"
+  annotations:
+    # Pad the virtual media DataVolume so the ~500 MB IPA ISO still fits after
+    # filesystem overhead on local-path storage (KubeVirtBMC >= v0.11.0).
+    bmc.kubevirt.io/datavolume-size-margin: "15"
+spec:
+  virtualMachineRef:
+    name: kvbmc-node-4
+  authSecretRef:
+    name: bmc-credentials
+  redfish:
+    virtualMedia:
+      tls:
+        # Trust Ironic's CA when fetching HTTPS virtual media
+        # (KubeVirtBMC >= v0.11.0). Unused when virtual media is plain HTTP.
+        caBundleConfigMapRef:
+          name: ironic-ca

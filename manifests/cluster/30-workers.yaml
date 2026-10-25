@@ -1,12 +1,12 @@
 # Workers: a MachineDeployment of BareMetalHosts. The KubeadmConfigTemplate
 # name carries the Kubernetes version because bootstrap templates are treated
 # as immutable — an upgrade creates a new one and points the MachineDeployment
-# at it, which is what triggers the rollout.
+# at it, which is what triggers the rollout (manifests/upgrade/30-workers.yaml).
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
 kind: KubeadmConfigTemplate
 metadata:
-  name: @@CLUSTER_NAME@@-workers-@@K8S_TARGET_SLUG@@
-  namespace: @@NAMESPACE@@
+  name: kvbmc-cluster-workers-v1-35-9
+  namespace: default
 spec:
   template:
     spec:
@@ -21,7 +21,7 @@ spec:
       - path: /etc/capm3-demo/kubernetes-version
         owner: root:root
         permissions: "0644"
-        content: "@@K8S_TARGET_VERSION@@"
+        content: "v1.35.9"
       preKubeadmCommands:
       - /usr/local/bin/install-k8s.sh
       joinConfiguration:
@@ -30,35 +30,30 @@ spec:
           kubeletExtraArgs:
           - name: node-labels
             value: "metal3.io/uuid={{ ds.meta_data.uuid }}"
-      users:
-      - name: ubuntu
-        sudo: "ALL=(ALL) NOPASSWD:ALL"
-        sshAuthorizedKeys:
-        - "@@SSH_PUBLIC_KEY@@"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: Metal3MachineTemplate
 metadata:
-  name: @@CLUSTER_NAME@@-workers
-  namespace: @@NAMESPACE@@
+  name: kvbmc-cluster-workers
+  namespace: default
 spec:
   nodeReuse: false
   template:
     spec:
       automatedCleaningMode: metadata
       dataTemplate:
-        name: @@CLUSTER_NAME@@-workers
+        name: kvbmc-cluster-workers
       image:
-        url: @@IMAGE_SERVER@@/node-image.img
-        checksum: @@IMAGE_SERVER@@/node-image.img.sha256sum
+        url: http://10.96.200.200:8080/node-image.img
+        checksum: http://10.96.200.200:8080/node-image.img.sha256sum
         checksumType: sha256
         diskFormat: qcow2
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: Metal3DataTemplate
 metadata:
-  name: @@CLUSTER_NAME@@-workers
-  namespace: @@NAMESPACE@@
+  name: kvbmc-cluster-workers
+  namespace: default
 spec:
   metaData:
     objectNames:
@@ -72,17 +67,17 @@ spec:
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
-  name: @@CLUSTER_NAME@@-workers
-  namespace: @@NAMESPACE@@
+  name: kvbmc-cluster-workers
+  namespace: default
   labels:
-    cluster.x-k8s.io/cluster-name: @@CLUSTER_NAME@@
+    cluster.x-k8s.io/cluster-name: kvbmc-cluster
     nodepool: workers
 spec:
-  clusterName: @@CLUSTER_NAME@@
-  replicas: @@WORKER_TARGET_REPLICAS@@
+  clusterName: kvbmc-cluster
+  replicas: 1
   selector:
     matchLabels:
-      cluster.x-k8s.io/cluster-name: @@CLUSTER_NAME@@
+      cluster.x-k8s.io/cluster-name: kvbmc-cluster
       nodepool: workers
   rollout:
     strategy:
@@ -94,17 +89,17 @@ spec:
   template:
     metadata:
       labels:
-        cluster.x-k8s.io/cluster-name: @@CLUSTER_NAME@@
+        cluster.x-k8s.io/cluster-name: kvbmc-cluster
         nodepool: workers
     spec:
-      clusterName: @@CLUSTER_NAME@@
-      version: @@K8S_TARGET_VERSION@@
+      clusterName: kvbmc-cluster
+      version: v1.35.9
       bootstrap:
         configRef:
           apiGroup: bootstrap.cluster.x-k8s.io
           kind: KubeadmConfigTemplate
-          name: @@CLUSTER_NAME@@-workers-@@K8S_TARGET_SLUG@@
+          name: kvbmc-cluster-workers-v1-35-9
       infrastructureRef:
         apiGroup: infrastructure.cluster.x-k8s.io
         kind: Metal3MachineTemplate
-        name: @@CLUSTER_NAME@@-workers
+        name: kvbmc-cluster-workers

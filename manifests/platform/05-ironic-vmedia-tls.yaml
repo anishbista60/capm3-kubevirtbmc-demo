@@ -24,4 +24,4 @@ spec:
     imageServerExternalURL: https://ironic.baremetal-operator-system.svc.cluster.local:8443
   tls:
     certificateName: ironic-cert
-  version: "@@IRONIC_VERSION@@"
+  version: "39.0"
