@@ -1,5 +1,5 @@
 # Control plane: KubeadmControlPlane + which BareMetalHosts it gets and what
-# is written to them. demo-upgrade.sh applies manifests/upgrade/20-controlplane.yaml.
+# is written to them. demos/upgrade.sh applies manifests/upgrade/20-controlplane.yaml.
 apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlane
 metadata:

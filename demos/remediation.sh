@@ -8,7 +8,7 @@
 # host boots again, kubelet starts and the node is Ready again — no human,
 # no replacement host.
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/lib.sh"
 trap 'on_error $LINENO' ERR
 
 require_kind_context

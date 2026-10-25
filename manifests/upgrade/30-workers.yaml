@@ -1,4 +1,4 @@
-# demo-upgrade.sh: the workers at v1.36.5. A new KubeadmConfigTemplate
+# demos/upgrade.sh: the workers at v1.36.5. A new KubeadmConfigTemplate
 # (bootstrap templates are treated as immutable) and the MachineDeployment
 # pointed at it, which is what triggers the rollout. No replicas, for the same
 # reason as upgrade/20-controlplane.yaml. The Metal3MachineTemplate and

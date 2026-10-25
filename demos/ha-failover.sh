@@ -8,9 +8,9 @@
 # another host and the API keep answering (etcd keeps quorum with 2 of 3).
 # Then the host is powered back on and rejoins.
 #
-#   HOLD_SECONDS=90 ./demo-ha-failover.sh     how long the leader stays off (default 60)
+#   HOLD_SECONDS=90 ./demos/ha-failover.sh     how long the leader stays off (default 60)
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/lib.sh"
 trap 'on_error $LINENO' ERR
 
 : "${HOLD_SECONDS:=60}"

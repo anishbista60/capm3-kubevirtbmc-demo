@@ -9,7 +9,7 @@
 #
 #   KEEP_HOSTS=true ./cleanup.sh   stop after step 1 (the "hosts return to the pool" demo)
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/lib.sh"
 trap 'on_error $LINENO' ERR
 : "${KEEP_HOSTS:=false}"
 

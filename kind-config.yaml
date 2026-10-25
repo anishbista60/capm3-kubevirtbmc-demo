@@ -8,7 +8,7 @@ networking:
   # Spelled out because the demo depends on them: Calico pins its node-IP
   # autodetection to the pod subnet, and the image server uses a fixed
   # ClusterIP from the service subnet. The workload cluster's CIDRs must not
-  # overlap either (see lib.sh).
+  # overlap either (see scripts/lib.sh).
   podSubnet: 10.244.0.0/16
   serviceSubnet: 10.96.0.0/16
 nodes:
