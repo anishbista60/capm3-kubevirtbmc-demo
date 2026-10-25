@@ -9,10 +9,10 @@
 #   4. Wait until CAPM3 has claimed hosts, Ironic has written the image and
 #      kubeadm has formed a cluster with Ready nodes
 #
-# Run ./watch.sh in a second terminal to see BMH -> Metal3Machine -> Machine
+# Run ./scripts/watch.sh in a second terminal to see BMH -> Metal3Machine -> Machine
 # -> Node move together.
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/lib.sh"
 trap 'on_error $LINENO' ERR
 
 NUM_HOSTS=$(( CP_REPLICAS + WORKER_REPLICAS + SPARE_HOSTS ))
@@ -119,11 +119,11 @@ summary() {
   info "Workload cluster nodes (via the kube-vip VIP $VIP):"
   wl get nodes -o wide
   echo
-  info "Talk to the workload cluster with:   ./wl-kubectl.sh get pods -A"
-  info "Lifecycle demos:                     ./demo-scale.sh out | in"
-  echo  "                                       ./demo-upgrade.sh"
-  echo  "                                       ./demo-ha-failover.sh"
-  echo  "                                       ./demo-remediation.sh   (stretch)"
+  info "Talk to the workload cluster with:   ./scripts/wl-kubectl.sh get pods -A"
+  info "Lifecycle demos:                     ./demos/scale.sh out | in"
+  echo  "                                       ./demos/upgrade.sh"
+  echo  "                                       ./demos/ha-failover.sh"
+  echo  "                                       ./demos/remediation.sh   (stretch)"
   info "Stage timings so far: $OUT/timings.tsv"
 }
 

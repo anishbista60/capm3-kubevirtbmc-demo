@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Lifecycle demo: scale the worker MachineDeployment.
-#   ./demo-scale.sh out   +1 worker: CAPM3 claims a free BMH, Ironic provisions it, it joins
-#   ./demo-scale.sh in    -1 worker: the node is drained, its BMH is cleaned and returns to the pool
-#   ./demo-scale.sh <n>   scale to exactly n workers
+#   ./demos/scale.sh out   +1 worker: CAPM3 claims a free BMH, Ironic provisions it, it joins
+#   ./demos/scale.sh in    -1 worker: the node is drained, its BMH is cleaned and returns to the pool
+#   ./demos/scale.sh <n>   scale to exactly n workers
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/lib.sh"
 trap 'on_error $LINENO' ERR
 
 require_kind_context

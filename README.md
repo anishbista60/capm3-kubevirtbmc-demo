@@ -47,30 +47,30 @@ kind create cluster --config kind-config.yaml
 In a second terminal, start the dashboard. It's the view to record:
 
 ```bash
-./watch.sh            # BareMetalHost → Metal3Machine → Machine → Node, live
+./scripts/watch.sh    # BareMetalHost → Metal3Machine → Machine → Node, live
 ```
 
 Then run the lifecycle demos. Each one is independent and safe to re-run:
 
 ```bash
-./demo-scale.sh out       # +1 worker: a free BMH is claimed, provisioned and joins
-./demo-scale.sh in        # -1 worker: node drained, BMH cleaned, back to "available"
-./demo-upgrade.sh         # rolling upgrade v1.35.9 → v1.36.5, new disks for every node
-./demo-ha-failover.sh     # 3 control planes; pull the VIP holder's power via its BMC
-./demo-remediation.sh     # stretch: MachineHealthCheck + Metal3Remediation reboot
+./demos/scale.sh out      # +1 worker: a free BMH is claimed, provisioned and joins
+./demos/scale.sh in       # -1 worker: node drained, BMH cleaned, back to "available"
+./demos/upgrade.sh        # rolling upgrade v1.35.9 → v1.36.5, new disks for every node
+./demos/ha-failover.sh    # 3 control planes; pull the VIP holder's power via its BMC
+./demos/remediation.sh    # stretch: MachineHealthCheck + Metal3Remediation reboot
 ```
 
 Helpers:
 
 ```bash
-./wl-kubectl.sh get pods -A     # kubectl against the workload cluster (via the VIP)
-./collect-info.sh               # version matrix, footprint, timings → out/blog-facts.md
-KEEP_HOSTS=true ./cleanup.sh    # delete the Cluster only: watch every BMH return to the pool
-./cleanup.sh                    # delete cluster, hosts and demo resources (platform stays)
+./scripts/wl-kubectl.sh get pods -A   # kubectl against the workload cluster (via the VIP)
+./scripts/collect-info.sh             # version matrix, footprint, timings → out/blog-facts.md
+KEEP_HOSTS=true ./cleanup.sh          # delete the Cluster only: watch every BMH return to the pool
+./cleanup.sh                          # delete cluster, hosts and demo resources (platform stays)
 kind delete cluster --name capm3-kubevirtbmc   # everything
 ```
 
-Useful knobs (see the top of [`lib.sh`](lib.sh)): `SPARE_HOSTS`, `VIRTUAL_MEDIA_TLS`, and `HOLD_SECONDS` for the failover demo. Everything else (cluster name, replica counts, host sizes, CIDRs, VIP) is plain YAML under [`manifests/`](manifests).
+Useful knobs (see the top of [`scripts/lib.sh`](scripts/lib.sh)): `SPARE_HOSTS`, `VIRTUAL_MEDIA_TLS`, and `HOLD_SECONDS` for the failover demo. Everything else (cluster name, replica counts, host sizes, CIDRs, VIP) is plain YAML under [`manifests/`](manifests).
 
 ## What each step shows
 
@@ -88,14 +88,14 @@ Useful knobs (see the top of [`lib.sh`](lib.sh)): `SPARE_HOSTS`, `VIRTUAL_MEDIA_
 
 ### Lifecycle (why CAPM3 matters)
 
-- **Scale out and in** (`demo-scale.sh`). A Machine is a claim on a host. Scaling out takes a free BMH. Scaling in drains the node, deprovisions the host (Ironic wipes the disk metadata) and returns it to `available`.
-- **Rolling upgrade** (`demo-upgrade.sh`). Hosts are never upgraded in place. The control plane uses `maxSurge: 1`: a spare host gets a fresh disk with the new version, joins, and then an old host is released. Workers use `maxSurge: 0`: release one, re-claim one. The new KubeadmConfigTemplate name carries the version, which is what triggers the MachineDeployment rollout.
+- **Scale out and in** (`demos/scale.sh`). A Machine is a claim on a host. Scaling out takes a free BMH. Scaling in drains the node, deprovisions the host (Ironic wipes the disk metadata) and returns it to `available`.
+- **Rolling upgrade** (`demos/upgrade.sh`). Hosts are never upgraded in place. The control plane uses `maxSurge: 1`: a spare host gets a fresh disk with the new version, joins, and then an old host is released. Workers use `maxSurge: 0`: release one, re-claim one. The new KubeadmConfigTemplate name carries the version, which is what triggers the MachineDeployment rollout.
 - **Delete the cluster** (`KEEP_HOSTS=true ./cleanup.sh`). Every BMH goes back to the pool.
 
 ### Stretch
 
-- **HA control plane and VIP failover** (`demo-ha-failover.sh`). The script scales the KCP to 3 and finds the kube-vip lease holder. It then powers that host off through its BMC with the `reboot.metal3.io/<key>` annotation in hard mode, so the path is BMO → Ironic → Redfish → KubeVirtBMC. A probe hits the API through the VIP every second and logs to `out/failover-probe.log`, so you can see how long the VIP took to move and that etcd kept quorum. Then the host is powered back on.
-- **Remediation** (`demo-remediation.sh`). The script stops kubelet on a worker. After 60s of NotReady, the MachineHealthCheck asks CAPM3 for a `Metal3Remediation`. The `Reboot` strategy power-cycles the host through Redfish, and the node comes back with no replacement host needed.
+- **HA control plane and VIP failover** (`demos/ha-failover.sh`). The script scales the KCP to 3 and finds the kube-vip lease holder. It then powers that host off through its BMC with the `reboot.metal3.io/<key>` annotation in hard mode, so the path is BMO → Ironic → Redfish → KubeVirtBMC. A probe hits the API through the VIP every second and logs to `out/failover-probe.log`, so you can see how long the VIP took to move and that etcd kept quorum. Then the host is powered back on.
+- **Remediation** (`demos/remediation.sh`). The script stops kubelet on a worker. After 60s of NotReady, the MachineHealthCheck asks CAPM3 for a `Metal3Remediation`. The `Reboot` strategy power-cycles the host through Redfish, and the node comes back with no replacement host needed.
 
 ## New since Part 2: HTTPS virtual media
 
@@ -133,17 +133,22 @@ Most of the work in getting this running was networking. These are the points wo
 
 ```
 kind-config.yaml            single-node kind, pinned pod/service CIDRs
-versions.env                every pinned version
-lib.sh                      shared helpers (waits, host pool, workload kubectl)
-setup-platform.sh           one-time platform install
-run-demo.sh                 core POC
-demo-*.sh                   lifecycle and stretch demos
-watch.sh  wl-kubectl.sh  collect-info.sh  cleanup.sh
+versions.env                pinned platform versions
+setup-platform.sh           1. one-time platform install
+run-demo.sh                 2. core POC: host pool → workload cluster
+cleanup.sh                  3. tear the demo down (platform stays)
+demos/                      lifecycle and stretch demos, run after run-demo.sh
+  scale.sh  upgrade.sh  ha-failover.sh  remediation.sh
+scripts/                    helpers
+  lib.sh                    shared functions and knobs, sourced by every script
+  watch.sh                  live BMH → Machine → Node dashboard
+  wl-kubectl.sh             kubectl against the workload cluster
+  collect-info.sh           version matrix, footprint, timings → out/blog-facts.md
 manifests/
   platform/   baremetal-net NAD, network fixups, Ironic certs/creds/CR, image server
   hosts/      BMC secret; kvbmc-node-<i>/ with vm.yaml (PVC + VM + VirtualMachineBMC) and bmh.yaml
   cluster/    Cluster + Metal3Cluster, control plane, workers (v1.35.9)
-  upgrade/    control plane and workers at v1.36.5, for demo-upgrade.sh
+  upgrade/    control plane and workers at v1.36.5, for demos/upgrade.sh
   addons/     Calico ClusterResourceSet (+ kustomize patch)
   remediation/ MachineHealthCheck + Metal3RemediationTemplate
   scripts/    install-k8s.sh (node bootstrap, from the install-k8s Secret)
@@ -162,7 +167,7 @@ Every manifest is plain YAML that the scripts apply as-is with `kubectl apply -f
 | DataVolume `x509: certificate signed by unknown authority` | Check that `configmap/ironic-ca` exists in `default` and the VMBMC references it. Fallback: `VIRTUAL_MEDIA_TLS=false`. |
 | DataVolume too small / out of space | Raise `bmc.kubevirt.io/datavolume-size-margin` in `manifests/hosts/kvbmc-node-*/vm.yaml`, or patch CDI `filesystemOverhead`. |
 | BMH `provisioned` but no kubeconfig / API never answers | Log into the host (`virtctl console`) and check `/var/log/cloud-init-output.log`. Is the baremetal-net NIC up with an address? Is kube-vip running (`crictl ps`)? |
-| Nodes Ready but pods can't reach each other | Calico autodetection: `./wl-kubectl.sh -n kube-system logs ds/calico-node \| grep -i autodetect`. |
+| Nodes Ready but pods can't reach each other | Calico autodetection: `./scripts/wl-kubectl.sh -n kube-system logs ds/calico-node \| grep -i autodetect`. |
 | CAPI controllers can't reach the VIP | Is `ds/network-fixups` running? Does the kind node have 192.168.100.1 on `br-baremetal`? |
 
 To get a shell on a host, use `virtctl console <host>`. The manifests don't add an SSH key; to use SSH, add a `users` entry with your public key to `kubeadmConfigSpec` in [`20-controlplane.yaml`](manifests/cluster/20-controlplane.yaml) and to the KubeadmConfigTemplate in [`30-workers.yaml`](manifests/cluster/30-workers.yaml) (and their copies in `manifests/upgrade/`).

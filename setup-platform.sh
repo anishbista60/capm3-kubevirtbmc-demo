@@ -4,7 +4,7 @@
 #   Ironic Standalone Operator, Ironic, Bare Metal Operator
 # Every step is idempotent; re-run after fixing a failure.
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/lib.sh"
 trap 'on_error $LINENO' ERR
 
 preflight() {

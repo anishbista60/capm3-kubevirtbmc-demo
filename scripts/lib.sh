@@ -1,11 +1,11 @@
 # Shared helpers for the CAPM3 + KubeVirtBMC demo scripts. Sourced, not run.
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANIFESTS="$ROOT/manifests"
 OUT="$ROOT/out"
 mkdir -p "$OUT"
 
-# shellcheck source=versions.env
+# shellcheck source=../versions.env
 source "$ROOT/versions.env"
 
 # --- Knobs -------------------------------------------------------------------

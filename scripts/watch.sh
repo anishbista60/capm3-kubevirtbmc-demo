@@ -2,7 +2,7 @@
 # Live dashboard for recordings: run it in a split pane next to the demo
 # scripts. Shows the same hosts at every layer —
 #   BareMetalHost (Metal3) -> Metal3Machine (CAPM3) -> Machine (CAPI) -> Node (workload cluster)
-#   INTERVAL=2 ./watch.sh
+#   INTERVAL=2 ./scripts/watch.sh
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 : "${INTERVAL:=3}"
