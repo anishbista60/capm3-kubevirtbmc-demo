@@ -8,29 +8,9 @@ None of the components are patched. Metal3 only sees Redfish BMC addresses and b
 
 ## Architecture
 
-```
-┌──────────────────────── kind node (management cluster) ────────────────────────────┐
-│                                                                                       │
-│   Cluster API + CAPM3 ──▶ Bare Metal Operator ──▶ Ironic (TLS) ──Redfish──┐          │
-│        ▲                                              │ virtual media     ▼          │
-│        │ Cluster / KCP / MachineDeployment            │ over HTTPS     KubeVirtBMC   │
-│        │                                              ▼ (CDI import)   (one BMC per  │
-│   you: kubectl apply                              ┌────────┐           VM, Redfish)  │
-│                                                   │ cdrom  │              │ power,   │
-│   image server (Ubuntu cloud image) ─────────────▶│  disk  │◀─────────────┘ boot,    │
-│   10.96.200.200:8080                              └────────┘                media    │
-│                                                                                       │
-│   ┌─ VM kvbmc-node-0 ─┐  ┌─ VM kvbmc-node-1 ─┐  ┌─ VM kvbmc-node-2 ─┐                │
-│   │ control plane     │  │ worker            │  │ (spare BMH)       │  ...           │
-│   │ kube-vip ★        │  │                   │  │                   │                │
-│   │ eth0: pod network │  │ eth0: pod network │  │ eth0: pod network │──▶ Ironic,     │
-│   │ eth1: baremetal   │  │ eth1: baremetal   │  │ eth1: baremetal   │    images,     │
-│   └────────┬──────────┘  └────────┬──────────┘  └────────┬──────────┘    internet    │
-│            └──────── br-baremetal 192.168.100.0/24 (Multus, real L2) ─┘              │
-│                       ★ API VIP 192.168.100.100 (kube-vip, ARP)                       │
-│                       .1 = kind node → CAPI controllers reach the VIP                 │
-└───────────────────────────────────────────────────────────────────────────────────────┘
-```
+![Architecture: CAPM3 drives KubeVirt VMs through Ironic and KubeVirtBMC on a single kind node](docs/architecture.png)
+
+The source is [`docs/architecture.excalidraw`](docs/architecture.excalidraw). Open it at [excalidraw.com](https://excalidraw.com) to edit it, then export it again as a PNG at 2x scale.
 
 Each host has two networks:
 
@@ -167,6 +147,7 @@ manifests/
   addons/     Calico ClusterResourceSet (+ kustomize patch)
   remediation/ MachineHealthCheck + Metal3RemediationTemplate
   scripts/    install-k8s.sh (node bootstrap, from the install-k8s Secret)
+docs/                       architecture diagram (.excalidraw source + exported .png)
 out/                        generated: kubeconfig, timings.tsv, blog-facts.md, probe logs
 ```
 
