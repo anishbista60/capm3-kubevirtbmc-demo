@@ -13,7 +13,7 @@ source "$ROOT/versions.env"
 : "${CONTAINER_RUNTIME:=docker}"
 KIND_NODE="${KIND_CLUSTER_NAME}-control-plane"
 
-: "${SPARE_HOSTS:=1}"                       # free BMHs kept around for scale-out / rolling upgrades
+: "${SPARE_HOSTS:=0}"                       # free BMHs kept around; scale-out / upgrade add hosts on demand
 
 # Fixed by the plain manifests in manifests/: change them there as well.
 CLUSTER_NAME=kvbmc-cluster                 # the CAPI workload cluster (manifests/cluster/)

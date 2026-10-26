@@ -20,7 +20,7 @@ Each host has two networks:
 ## Prerequisites
 
 - **An x86_64 Linux host with KVM.** Nested virtualization works if `/dev/kvm` exists in the guest. The node images and IPA ramdisks are x86_64. Without `/dev/kvm` the scripts fall back to KubeVirt software emulation, which works but is very slow. Apple Silicon Macs are not supported.
-- **Resources.** The default pool is 3 hosts (1 control plane, 1 worker, 1 spare) with 2 vCPU, 4 GiB RAM and a 30 GiB disk each. Plan for about **8 CPUs, 20 GiB RAM and 100 GiB disk**. The HA demo grows the pool to 5 hosts, which needs about **12 CPUs and 28 GiB RAM**.
+- **Resources.** The default pool is 2 hosts (1 control plane, 1 worker) with 2 vCPU, 4 GiB RAM and a 30 GiB disk each. Plan for about **6 CPUs, 16 GiB RAM and 80 GiB disk**. Each VM's pod requests about 4.3 GiB, so a 16 GiB host fits two VMs next to the platform but not a third. `SPARE_HOSTS=1 ./run-demo.sh` keeps a free host for scale-out and rolling upgrades and needs about **20 GiB RAM**. The HA demo grows the pool to 5 hosts, which needs about **12 CPUs and 28 GiB RAM**. Don't go below 4 GiB per VM: IPA downloads the node image into its RAM-backed `/tmp` before writing it to disk.
 - **Tools:** `kind`, `kubectl`, `clusterctl` (v1.14.x), `docker` and `curl`.
 - **Outbound internet** from the host, because the VMs download packages and images.
 
