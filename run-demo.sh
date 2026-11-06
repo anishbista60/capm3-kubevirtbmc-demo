@@ -101,7 +101,7 @@ create_cluster() {
   stage_end
 
   stage_start "Control plane ($cp) and workers ($workers) Ready"
-  wait_until "KubeadmControlPlane $cp/$cp ready" 3600 "kcp_settled $cp $version" kcp_status
+  wait_until "KubeadmControlPlane $cp/$cp ready" 5400 "kcp_settled $cp $version" kcp_status
   wait_until "MachineDeployment $workers/$workers ready" 3600 "md_settled $workers $version" md_status
   wait_until "$(( cp + workers )) Ready nodes" 1800 "(( \$(wl_ready_nodes) >= $(( cp + workers )) ))" \
     "wl get nodes --no-headers | awk '{print \$1\"=\"\$2}'"

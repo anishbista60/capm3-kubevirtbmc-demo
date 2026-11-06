@@ -20,7 +20,7 @@ Each host has two networks:
 ## Prerequisites
 
 - **An x86_64 Linux host with KVM.** Nested virtualization works if `/dev/kvm` exists in the guest. The node images and IPA ramdisks are x86_64. Without `/dev/kvm` the scripts fall back to KubeVirt software emulation, which works but is very slow. Apple Silicon Macs are not supported.
-- **Resources.** The default pool is 2 hosts (1 control plane, 1 worker) with 2 vCPU, 4 GiB RAM and a 30 GiB disk each. Plan for about **6 CPUs, 16 GiB RAM and 80 GiB disk**. Each VM's pod requests about 4.3 GiB, so a 16 GiB host fits two VMs next to the platform but not a third. `SPARE_HOSTS=1 ./run-demo.sh` keeps a free host for scale-out and rolling upgrades and needs about **20 GiB RAM**. The HA demo grows the pool to 5 hosts, which needs about **12 CPUs and 28 GiB RAM**. Don't go below 4 GiB per VM: IPA downloads the node image into its RAM-backed `/tmp` before writing it to disk.
+- **Resources.** The default pool is 5 hosts (3 control planes, 2 workers) with 2 vCPU, 4 GiB RAM and a 30 GiB disk each. Plan for about **12 CPUs, 28 GiB RAM and 200 GiB disk**. Each VM's pod requests about 4.3 GiB. `SPARE_HOSTS=1 ./run-demo.sh` keeps a free host for scale-out and rolling upgrades, for 6 hosts in total, and needs about **14 CPUs, 32 GiB RAM and 230 GiB disk**. `demos/scale.sh out` and `demos/upgrade.sh` add that sixth host on demand if it isn't there. The pool has manifests for 6 hosts, so scale back in before upgrading. Don't go below 4 GiB per VM: IPA downloads the node image into its RAM-backed `/tmp` before writing it to disk.
 - **Tools:** `kind`, `kubectl`, `clusterctl` (v1.14.x), `docker` and `curl`.
 - **Outbound internet** from the host, because the VMs download packages and images.
 
@@ -94,7 +94,7 @@ Useful knobs (see the top of [`scripts/lib.sh`](scripts/lib.sh)): `SPARE_HOSTS`,
 
 ### Stretch
 
-- **HA control plane and VIP failover** (`demos/ha-failover.sh`). The script scales the KCP to 3 and finds the kube-vip lease holder. It then powers that host off through its BMC with the `reboot.metal3.io/<key>` annotation in hard mode, so the path is BMO → Ironic → Redfish → KubeVirtBMC. A probe hits the API through the VIP every second and logs to `out/failover-probe.log`, so you can see how long the VIP took to move and that etcd kept quorum. Then the host is powered back on.
+- **HA control plane and VIP failover** (`demos/ha-failover.sh`). The script scales the KCP to 3 if needed and finds the kube-vip lease holder. It then powers that host off through its BMC with the `reboot.metal3.io/<key>` annotation in hard mode, so the path is BMO → Ironic → Redfish → KubeVirtBMC. A probe hits the API through the VIP every second and logs to `out/failover-probe.log`, so you can see how long the VIP took to move and that etcd kept quorum. Then the host is powered back on.
 - **Remediation** (`demos/remediation.sh`). The script stops kubelet on a worker. After 60s of NotReady, the MachineHealthCheck asks CAPM3 for a `Metal3Remediation`. The `Reboot` strategy power-cycles the host through Redfish, and the node comes back with no replacement host needed.
 
 ## New since Part 2: HTTPS virtual media

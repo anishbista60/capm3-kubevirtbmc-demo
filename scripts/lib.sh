@@ -18,8 +18,8 @@ KIND_NODE="${KIND_CLUSTER_NAME}-control-plane"
 # Fixed by the plain manifests in manifests/: change them there as well.
 CLUSTER_NAME=kvbmc-cluster                 # the CAPI workload cluster (manifests/cluster/)
 NAMESPACE=default                          # every namespaced manifest uses it
-CP_REPLICAS=1                              # initial KubeadmControlPlane replicas
-WORKER_REPLICAS=1                          # initial MachineDeployment replicas
+CP_REPLICAS=3                              # initial KubeadmControlPlane replicas
+WORKER_REPLICAS=2                          # initial MachineDeployment replicas
 HOST_PREFIX=kvbmc-node                     # one directory per host in manifests/hosts/
 HOST_LABEL="capm3-demo.metal3.io/host"
 VIP=192.168.100.100                        # kube-vip VIP on baremetal-net (manifests/platform/01-baremetal-net.yaml)
