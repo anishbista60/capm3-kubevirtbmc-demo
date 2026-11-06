@@ -71,11 +71,10 @@ install_networking() {
   stage_start "Multus $MULTUS_VERSION + baremetal-net"
   # kind nodes only ship kindnet's CNI plugins; baremetal-net needs "bridge".
   if ! $CONTAINER_RUNTIME exec "$KIND_NODE" test -x /opt/cni/bin/bridge; then
-    local tmp; tmp=$(mktemp -d)
+    # Streamed, not `docker cp`: snap-packaged Docker has a private /tmp and can't see host temp files.
     curl -fsSL "https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGINS_VERSION}/cni-plugins-linux-amd64-${CNI_PLUGINS_VERSION}.tgz" \
-      | tar -xz -C "$tmp" ./bridge
-    $CONTAINER_RUNTIME cp "$tmp/bridge" "$KIND_NODE:/opt/cni/bin/bridge"
-    rm -rf "$tmp"
+      | tar -xzO ./bridge \
+      | $CONTAINER_RUNTIME exec -i "$KIND_NODE" sh -c 'cat > /opt/cni/bin/bridge && chmod 0755 /opt/cni/bin/bridge'
     info "installed CNI bridge plugin $CNI_PLUGINS_VERSION on $KIND_NODE"
   fi
   # Upstream thick-plugin manifest, pinned to the release image.
