@@ -1,7 +1,8 @@
 # demos/upgrade.sh: manifests/cluster/20-controlplane.yaml at v1.36.5.
-# No replicas on purpose: it is applied server-side with its own field
-# manager, so the replica count set by run-demo.sh or the scale/HA demos is
-# left as it is. The Metal3MachineTemplate and Metal3DataTemplate are reused.
+# No replicas here: demos/upgrade.sh adds the count in effect when it applies
+# this file, so the one set by run-demo.sh or the scale/HA demos is kept. Apply
+# it through that script. The Metal3MachineTemplate and Metal3DataTemplate are
+# reused.
 apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlane
 metadata:

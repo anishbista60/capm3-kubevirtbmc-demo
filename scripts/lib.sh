@@ -162,10 +162,19 @@ kcp_status() {
   kubectl -n "$NAMESPACE" get kcp "$CLUSTER_NAME" \
     -o jsonpath='replicas={.status.replicas} ready={.status.readyReplicas} upToDate={.status.upToDateReplicas} version={.spec.version}' 2>/dev/null
 }
+# Status lags behind a spec change: right after an upgrade is applied, the old
+# Machines still count as up to date. So the settled checks also look at the
+# Machines themselves: exactly <replicas> of them, all at <version>.
+machines_at() { # machines_at <label selector> <replicas> <version>
+  local v; v=$(kubectl -n "$NAMESPACE" get machines -l "$1" \
+    -o jsonpath='{range .items[*]}{.spec.version}{"\n"}{end}' 2>/dev/null)
+  [[ $(grep -c . <<<"$v") -eq $2 && $(grep -cxF "$3" <<<"$v") -eq $2 ]]
+}
 kcp_settled() { # kcp_settled <replicas> <version>
   local s; s=$(kubectl -n "$NAMESPACE" get kcp "$CLUSTER_NAME" \
     -o jsonpath='{.status.replicas}/{.status.readyReplicas}/{.status.upToDateReplicas}/{.spec.version}' 2>/dev/null)
-  [[ "$s" == "$1/$1/$1/$2" ]]
+  [[ "$s" == "$1/$1/$1/$2" ]] \
+    && machines_at "cluster.x-k8s.io/cluster-name=$CLUSTER_NAME,cluster.x-k8s.io/control-plane" "$1" "$2"
 }
 md_status() {
   kubectl -n "$NAMESPACE" get md "$CLUSTER_NAME-workers" \
@@ -174,7 +183,8 @@ md_status() {
 md_settled() { # md_settled <replicas> <version>
   local s; s=$(kubectl -n "$NAMESPACE" get md "$CLUSTER_NAME-workers" \
     -o jsonpath='{.status.replicas}/{.status.readyReplicas}/{.status.upToDateReplicas}/{.spec.template.spec.version}' 2>/dev/null)
-  [[ "$s" == "$1/$1/$1/$2" ]]
+  [[ "$s" == "$1/$1/$1/$2" ]] \
+    && machines_at "cluster.x-k8s.io/deployment-name=$CLUSTER_NAME-workers" "$1" "$2"
 }
 
 # Resolves a workload node name to its BareMetalHost: CAPM3 labels each node
